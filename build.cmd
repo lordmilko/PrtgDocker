@@ -1,0 +1,1 @@
+start powershell -executionpolicy bypass -noexit -command ". '%~dp0\PrtgDocker.ps1'; Write-Host \"Available Commands:`n    New-PrtgBuild`n    New-PrtgContainer`n    Get-PrtgImage\""
