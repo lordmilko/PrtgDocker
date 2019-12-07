@@ -17,16 +17,16 @@ Describe "New-PrtgBuild" {
     Context "Image" {
         It "qualifies a tag" {
 
-            $settings = ([PSCustomObject]@{ BaseImage = "ltsc2016" })
+            $settings = ([PSCustomObject]@{ BaseImage = "ltsc2019" })
 
             __QualifyBaseImage $settings
 
-            $settings.BaseImage | Should Be "mcr.microsoft.com/windows/servercore:ltsc2016"
+            $settings.BaseImage | Should Be "mcr.microsoft.com/windows/servercore:ltsc2019"
         }
 
         it "doesn't qualify a full image path" {
 
-            $input = "mcr.microsoft.com/windows/servercore:ltsc2016"
+            $input = "mcr.microsoft.com/windows/servercore:ltsc2019"
             $settings = ([PSCustomObject]@{ BaseImage = $input })
 
             __QualifyBaseImage $settings
@@ -114,7 +114,7 @@ Describe "New-PrtgBuild" {
             }.GetNewClosure()
         }
 
-        function MockExec($version, $script:pullStr, $script:buildStr)
+        function MockExec($version, $script:imageStr, $script:pullStr, $script:buildStr)
         {
             MockInstaller $version
 
@@ -122,6 +122,15 @@ Describe "New-PrtgBuild" {
                 return $commands -join " " -eq $script:pullStr
             } -Verifiable
 
+            Mock "__Exec" {} -ParameterFilter {
+                return $commands -join " " -eq $script:imageStr
+            } -Verifiable
+
+            MockBuild $script:buildStr
+        }
+
+        function MockBuild($script:buildStr)
+        {
             Mock "__Exec" {} -ParameterFilter {
                 $temp = Join-Path ([IO.Path]::GetTempPath()) "dockerTemp"
                 $b = "build $temp -t $script:buildStr"
@@ -204,8 +213,9 @@ Describe "New-PrtgBuild" {
 
             MockExec `
                 "14.1.2.3" `
-                "pull mcr.microsoft.com/windows/servercore:ltsc2016" `
-                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2016"
+                "image ls --format `"{{json . }}`"" `
+                "pull mcr.microsoft.com/windows/servercore:ltsc2019" `
+                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019"
 
             MockCopy
             MockRemove
@@ -219,8 +229,9 @@ Describe "New-PrtgBuild" {
 
             MockExec `
                 "17.1.2.3" `
-                "pull mcr.microsoft.com/windows/servercore:ltsc2016" `
-                "prtg:17.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2016"
+                "image ls --format `"{{json . }}`"" `
+                "pull mcr.microsoft.com/windows/servercore:ltsc2019" `
+                "prtg:17.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019"
 
             MockCopy $true
             MockRemove $true
@@ -238,8 +249,9 @@ Describe "New-PrtgBuild" {
 
             MockExec `
                 "14.1.2.3" `
-                "pull mcr.microsoft.com/windows/servercore:ltsc2016" `
-                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2016 --no-cache"
+                "image ls --format `"{{json . }}`"" `
+                "pull mcr.microsoft.com/windows/servercore:ltsc2019" `
+                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019 --no-cache"
 
             MockCopy
             MockRemove
@@ -253,8 +265,9 @@ Describe "New-PrtgBuild" {
 
             MockExec `
                 "14.1.2.3" `
-                "pull mcr.microsoft.com/windows/servercore:ltsc2016" `
-                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2016 --isolation=hyperv"
+                "image ls --format `"{{json . }}`"" `
+                "pull mcr.microsoft.com/windows/servercore:ltsc2019" `
+                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019 --isolation=hyperv"
 
             MockCopy
             MockRemove
@@ -267,6 +280,7 @@ Describe "New-PrtgBuild" {
         It "specifies a custom base image" {
             MockExec `
                 "14.1.2.3" `
+                "image ls --format `"{{json . }}`"" `
                 "pull mcr.microsoft.com/windows/servercore:1803" `
                 "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:1803"
 
@@ -282,8 +296,9 @@ Describe "New-PrtgBuild" {
 
             MockExec `
                 "14.1.2.3" `
-                "pull mcr.microsoft.com/windows/servercore:ltsc2016" `
-                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2016 --build-arg PRTG_LICENSEKEY=testName --build-arg PRTG_LICENSENAME=testName --build-arg PRTG_EMAIL=potato@example.com"
+                "image ls --format `"{{json . }}`"" `
+                "pull mcr.microsoft.com/windows/servercore:ltsc2019" `
+                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019 --build-arg PRTG_LICENSEKEY=testName --build-arg PRTG_LICENSENAME=testName --build-arg PRTG_EMAIL=potato@example.com"
 
             MockCopy
             MockRemove
@@ -296,8 +311,9 @@ Describe "New-PrtgBuild" {
         It "specifies a repository" {
             MockExec `
                 "14.1.2.3" `
-                "pull mcr.microsoft.com/windows/servercore:ltsc2016" `
-                "lordmilko/prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2016"
+                "image ls --format `"{{json . }}`"" `
+                "pull mcr.microsoft.com/windows/servercore:ltsc2019" `
+                "lordmilko/prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019"
 
             MockCopy
             MockRemove
@@ -311,8 +327,9 @@ Describe "New-PrtgBuild" {
 
             MockExec `
                 "14.1.2.3" `
-                "pull mcr.microsoft.com/windows/servercore:ltsc2016" `
-                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2016 --build-arg PRTG_INSTALLER_URL=http://<wildcard>:<wildcard>/notepad+2006.exe"
+                "image ls --format `"{{json . }}`"" `
+                "pull mcr.microsoft.com/windows/servercore:ltsc2019" `
+                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019 --build-arg PRTG_INSTALLER_URL=http://<wildcard>:<wildcard>/notepad+2006.exe"
             
             Mock "Test-Path" {
                 return $true
@@ -362,6 +379,23 @@ Describe "New-PrtgBuild" {
             }
 
             New-PrtgBuild -Path "C:\Archives" -Server
+
+            Assert-VerifiableMocks
+        }
+
+        It "doesn't pull base image when it already exists" {
+
+            Mock "Get-PrtgImage" {
+                return $true
+            }
+
+            MockInstaller "14.1.2.3"
+            MockBuild "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019"
+
+            MockCopy
+            MockRemove
+
+            New-PrtgBuild -Path "C:\Archives"
 
             Assert-VerifiableMocks
         }

@@ -2,7 +2,7 @@
 
 Have you ever wanted to run PRTG Network Monitor in Docker? No? Well now you can!
 
-This repository contains all the steps and components required to containerize (theoretically) any version of PRTG. As of writing this project [has successfully been used](https://hub.docker.com/r/lordmilko/prtg) to create Docker images of all versions of PRTG from 14.4 to 19.2, and likely supports additional versions outside this range.
+This repository contains all the steps and components required to containerize (theoretically) any version of PRTG. As of writing this project [has successfully been used](https://hub.docker.com/r/lordmilko/prtg) to create Docker images of all versions of PRTG from 14.4 to 19.4, and likely supports additional versions outside this range.
 
 To simplify deployment, several cmdlets are provided to help validate your inputs and interface with the Docker CLI for you. For the brave of heart, instructions are also provided for those that wish to control the Docker build process manually.
 
@@ -10,7 +10,7 @@ To simplify deployment, several cmdlets are provided to help validate your input
 
 ### PowerShell
 
-1. Create a Windows Server 2016 1607 VM with at least 6gb RAM
+1. Create a Windows Server 2019 LTSC (1809, 17763.864) VM with at least 6gb RAM
 2. Install Docker ¹
 3. Clone this repo to your server (`git clone https://github.com/lordmilko/PrtgDocker`)
 4. Place any installers you wish to containerize into the repo
@@ -27,10 +27,10 @@ To simplify deployment, several cmdlets are provided to help validate your input
 
 ### Docker CLI
 
-1. Create a Windows Server 2016 1607 VM with at least 6gb RAM
+1. Create a Windows Server 2019 LTSC (1809, 17763.864) VM with at least 6gb RAM
 2. Install Docker ¹
 3. Clone this repo to your server (`git clone https://github.com/lordmilko/PrtgDocker`)
-4. Please **a single installer** you wish to containerize into the repo
+4. Place **a single installer** you wish to containerize into the repo
 5. Change the date on your server as required ;)
 6. Run the following commands under the repo folder
 
@@ -75,15 +75,14 @@ New-PrtgContainer *14.4* -Volume
 
 ### Image Compatibility
 
-As of writing, PRTG only works on Windows Server 2016 based images, when utilizing (mainly) 64-bit executables. To achieve this you must
-* Use any Server Core image from `ltsc2016` to `1803`; all images after this are based on Server 2019
-* Make PRTG think the system has at least 6gb of RAM so that it registers the 64-bit version of `PRTG Server.exe` instead of the 32-bit version
+PRTG is compatible with both Windows Server 2016 and 2019 based images when utilizing (mainly) 64-bit executables. When installing in Server Core 2019 based images, PrtgDocker will
+automatically install the required fonts (Arial and Tahoma) required for PRTG's chart drawing library (Chart Director) that have been stripped from the base installation.
 
-Attempting to use PRTG in a 2019 based image will cause the web server to freeze upon visiting any page with a chart on it (due to a crash in the `ChartDirector` library), while attempting to use the 32-bit version of `PRTG Server` will cause immediate crashes upon starting when utilizing any version of PRTG using Themida anti-cracking software (PRTG [16.4.28+](https://www.paessler.com/prtg/history/prtg-16#16.4.28)).
-
+Attempting to use the 32-bit version of `PRTG Server` will cause immediate crashes upon starting when utilizing any version of PRTG using Themida anti-cracking software (PRTG [16.4.28+](https://www.paessler.com/prtg/history/prtg-16#16.4.28)).
 ### Hyper-V Isolation
 
-If you have a Server 2019 based system and still wish to use these Server 2016 based images, this can still be achieved by using Hyper-V isolation. To build and deploy images with Hyper-V isolation:
+If you wish to run your images on a system that does not match the system the image was built on, you [may be able to do](https://docs.microsoft.com/en-us/virtualization/windowscontainers/deploy-containers/version-compatibility) so using Hyper-V isolation.
+Images can be built and deployed using Hyper-V isolation by specifying the `-HyperV` parameter to `New-PrtgBuild` or `New-PrtgContainer` respectively.
 
 1. Install Hyper-V on your Docker server
 2. `New-PrtgBuild -HyperV`
@@ -93,17 +92,15 @@ Note: If your Docker server is a virtual machine, you may need to enable [nested
 
 ## Installing Docker
 
-So you want to check this project out. You setup a VM, had a go following [this extremely simple three-step process](https://docs.docker.com/install/windows/docker-ee/) for installing Docker, and to your absolute surprise it didn't work! Something about the hash of a file not being correct!
+In theory installing Docker should be as simple as following [this extremely simple three-step process](https://docs.docker.com/install/windows/docker-ee/).
 
-Congratulations! You've just successfully forayed into the nightmare that is using Docker on Windows. The amount of incompetence it takes to released a bungled *installer* is beyond me - *you had one job!*
-
-You can workaround this issue by performing the following steps:
+In the event you run into issues verifying the integrity of the Docker installer's zip file, you can work around this by executing the following steps
 
 1. Execute the commands to install Docker on Windows as normal (if you haven't already)
 
 ```powershell
 Install-Module DockerMsftProvider -Force
-Install-Package Docker -ProviderName DockerMsftProvider -Force
+Install-Package Docker -ProviderName DockerMsftProvider -Force -Verbose
 ```
 
 2. Take note of the name of the file that couldn't be verified (as of writing `Docker-19-03-1.zip`), then execute the following commands, substituting `19-03-1` for whatever the latest version is

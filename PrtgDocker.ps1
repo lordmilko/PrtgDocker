@@ -33,7 +33,7 @@ Specifies to generate Docker images without using the build cache.
 .PARAMETER HyperV
 Specifies that Docker should use Hyper-V isolation when building the image.
 .PARAMETER BaseImage
-The Windows Server build that should be used as the Docker Image base. By default this is "ltsc2016".
+The Windows Server build that should be used as the Docker Image base. By default this is "ltsc2019".
 .PARAMETER PrtgEmail
 The email address that should be used for the PRTG Administrator account. By default a dummy email is used.
 .PARAMETER LicenseName
@@ -67,7 +67,7 @@ function New-PrtgBuild
 
         [ValidateNotNullorEmpty()]
         [Parameter(Mandatory = $false)]
-        [string]$BaseImage = "ltsc2016",
+        [string]$BaseImage = "ltsc2019",
 
         [ValidateNotNullorEmpty()]
         [Parameter(Mandatory = $false)]
@@ -89,7 +89,10 @@ function New-PrtgBuild
         [string]$Repository = "prtg",
 
         [Parameter(Mandatory = $false)]
-        [switch]$Server
+        [switch]$Server,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$SkipExisting
     )
 
     $settings = [PSCustomObject]@{
@@ -102,6 +105,7 @@ function New-PrtgBuild
         DockerHost = $null
         Repository = $Repository
         FileServer = $null
+        SkipExisting = $SkipExisting
     }
 
     if($Credential)
@@ -120,7 +124,12 @@ function New-PrtgBuild
     {
         $settings.FileServer = __PrepareDockerTemp $Server
 
-        __Exec @("pull",$settings.BaseImage)
+        $split = $settings.BaseImage -split ":"
+
+        if(!(Get-PrtgImage -Repository $split[0] -Tag $split[1]))
+        {
+            __Exec @("pull",$settings.BaseImage)
+        }
 
         foreach($installer in $installers)
         {
@@ -229,7 +238,7 @@ function __GetInstallers($name, $installerFolder)
 
         foreach($ignore in $ignored)
         {
-            Write-Host "    $($ignored.Name)"
+            Write-Host "    $($ignore.Name)"
         }
     }
 
@@ -283,6 +292,16 @@ function __PrepareDockerTemp($server)
         Copy-Item $source $destination -Force
     }
 
+    # Server 2019 doesn't have fonts, so include these as well
+    $fonts = gci C:\Windows\Fonts | where {$_.Name -like "*arial*" -or $_.Name -like "*tahoma*" }
+
+    foreach($font in $fonts)
+    {
+        $destination = Join-Path $script:dockerTemp $font.Name
+
+        Copy-Item $font.FullName $destination -Force
+    }
+
     if($server)
     {
         $fileServer = New-Object SimpleHTTPServer $script:dockerTempServer
@@ -298,6 +317,15 @@ function __PrepareDockerTemp($server)
 function __ExecuteBuild($installer, $settings)
 {
     Write-Host "Processing version '$($installer.Version)'" -Foreground Magenta
+
+    if($settings.SkipExisting)
+    {
+        if(Get-PrtgImage -Repository $settings.Repository -Tag $installer.Version.ToString("3"))
+        {
+            Write-Host "    Skipping installer as image already exists"
+            return
+        }
+    }
 
     __CopyToDockerTemp $installer.FullName $settings
 
@@ -780,6 +808,8 @@ function Install-PrtgServer
         $job | Remove-Job -Force
     }
 
+    __InstallFonts
+
     __VerifyBuild $installerLog
     __CleanupBuild
 
@@ -837,6 +867,51 @@ function __ExecInstall($installer, $installerArgs)
     Write-Host "Executing '$installer $installerArgs'"
     & $installer @installerArgs | Out-Null
     Write-Host "    Installer completed with exit code $LASTEXITCODE"
+}
+
+function __InstallFonts
+{
+    Write-Host "Checking required fonts are installed"
+
+    $fonts = gci $script:imageContext *.ttf
+    $fontsFolder = "C:\Windows\Fonts"
+
+    foreach($font in $fonts)
+    {
+        $destination = Join-Path $fontsFolder $font.Name
+
+        if(!(Test-Path $destination))
+        {
+            Write-Host "    Installing font '$($font.Name)'"
+
+            $fontName = __GetFontName $font.Name
+
+            Move-Item $font.FullName $destination
+
+            New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts" -Name "$fontName (TypeType)" -Value $font.Name -PropertyType String -Force | Out-Null
+        }
+        else
+        {
+            Write-Host "    Font '$($font.Name)' is already installed"
+        }
+    }
+}
+
+function __GetFontName($fileName)
+{
+    switch($fileName)
+    {
+        "arial.ttf" { "Arial" }
+        "arialbd.ttf" { "Arial Bold" }
+        "arialbi.ttf" { "Arial Bold Italic" }
+        "ariali.ttf" { "Arial Italic" }
+        "ariblk.ttf" { "Arial Black" }
+        "tahoma.ttf" { "Tahoma" }
+        "tahomabd.ttf" { "Tahoma Bold" }
+        default {
+            throw "Don't know what the font name of '$fileName' is"
+        }
+    }  
 }
 
 function __VerifyBuild($logFile)

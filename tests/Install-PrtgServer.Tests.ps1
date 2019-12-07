@@ -38,16 +38,27 @@ Describe "Install-PrtgServer" {
 
     function MockInstaller($version)
     {
+        $global:versionVar = $version
+
         Mock "Get-ChildItem" {
+
+            [PSCustomObject]@{
+                FullName = "C:\Windows\arial.ttf"
+                Name = "arial.ttf"
+            }
+        } -ParameterFilter { $Filter -eq "*.ttf" }
+
+        Mock "Get-ChildItem" {
+
             [PSCustomObject]@{
                 FullName = "C:\Installer\notepad.exe"
                 Name = "notepad.exe"
                 VersionInfo = [PSCustomObject]@{
                     ProductName = "PRTG Network Monitor"
-                    FileVersion = $version
+                    FileVersion = $global:versionVar
                 }
             }
-        }.GetNewClosure()
+        } -ParameterFilter { $Filter -ne "*.ttf" }
     }
 
     function MockCopy($script:includeConfig = $false)
@@ -172,7 +183,7 @@ Describe "Install-PrtgServer" {
     }
 
     It "throws when no installers in build context" {
-        Mock "Get-ChildItem" {}
+        Mock "Get-ChildItem" {} -ParameterFilter { $Filter -ne "*.ttf" }
 
         { Install-PrtgServer } | Should Throw "No executable files exist in 'C:\Installer'"
     }
@@ -196,7 +207,7 @@ Describe "Install-PrtgServer" {
                     FileVersion = "17.1.2.3"
                 }
             }
-        }
+        } -ParameterFilter { $Filter -ne "*.ttf" }
 
         { Install-PrtgServer } | Should Throw "Multiple PRTG installers were passed to build context"
     }
