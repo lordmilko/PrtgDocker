@@ -16,6 +16,8 @@ $script:dockerTemp = Join-Path ([IO.Path]::GetTempPath()) "dockerTemp"
 $script:dockerTempServer = Join-Path ([IO.Path]::GetTempPath()) "dockerTempServer"
 $script:imageContext = "C:\Installer"
 $script:installerLog = Join-Path $script:imageContext "log.log"
+$script:prtgProgramFiles = "C:\Program Files (x86)\PRTG Network Monitor"
+$script:customSensorsBackup = "$script:prtgProgramFiles\Custom Sensors (Backup)"
 
 #region Build
     #region New-PrtgBuild
@@ -797,6 +799,7 @@ function Install-PrtgServer
         "/log=`"$installerLog`""
         "/licensekey=`"$env:PRTG_LICENSEKEY`""
         "/licensekeyname=`"$env:PRTG_LICENSENAME`""
+        "/NoInitialAutoDisco=1"
     )
 
     $job = __StartLicenseFixer $installer
@@ -809,9 +812,12 @@ function Install-PrtgServer
     }
 
     __InstallFonts
+    __DisableNags
+    __MoveCustomSensors
 
     __VerifyBuild $installerLog
     __CleanupBuild
+    __RemoveHelp
 
     Write-Host "Installation completed successfully. Finalizing image..."
 }
@@ -897,6 +903,65 @@ function __InstallFonts
     }
 }
 
+function __DisableNags
+{
+    Write-Host "Disabling UI nags"
+
+    $str = @"
+
+.prtg_growl_important {
+    display: none;
+}
+"@
+
+    $stylesPath = "$script:prtgProgramFiles\webroot\css\styles_custom_v2.css"
+
+    if(Test-Path $stylesPath)
+    {
+        Add-Content $stylesPath $str
+    }
+    else
+    {
+        Set-Content $stylesPath $str
+    }
+
+    $path = "HKLM:\SOFTWARE\WOW6432Node\Paessler\PRTG Network Monitor\Server"
+
+    New-ItemProperty -Path $path -Name DoInitialAutoDiscover -Value 0 -PropertyType dword -Force | Out-Null
+
+    New-ItemProperty -Path "$path\Webserver" -Name showsslnagscreen -Value 0 -PropertyType dword -Force | Out-Null
+    New-ItemProperty -Path "$path\Webserver" -Name ShowHomeNagScreen -Value 0 -PropertyType dword -Force | Out-Null
+}
+
+function __RemoveHelp
+{
+    Write-Host "    Removing built-in help to improve startup/search performance"
+
+    $helpPath = "$script:prtgProgramFiles\webroot\help"
+
+    if(Test-Path $helpPath)
+    {
+        Remove-Item $helpPath -Recurse -Force
+    }
+}
+
+function __MoveCustomSensors
+{
+    # Create a symlink from the normal Custom Sensors folder to ProgramData so we can manage custom sensors from our config volume
+
+    Write-Host "Moving Custom Sensors"    
+
+    $oldCustomSensors = "$script:prtgProgramFiles\Custom Sensors"
+    $newCustomSensors = "C:\ProgramData\Paessler\PRTG Network Monitor\Custom Sensors"
+
+    # If the container startup script detects the ProgramData Custom Sensors folder is missing, we will recreate it
+    Copy-Item $oldCustomSensors $script:customSensorsBackup -Recurse
+
+    Move-Item $oldCustomSensors $newCustomSensors
+
+    New-Item -ItemType SymbolicLink -Path $oldCustomSensors -Target $newCustomSensors | Out-Null
+}
+
 function __GetFontName($fileName)
 {
     switch($fileName)
@@ -975,9 +1040,9 @@ function __CleanupBuild($installer)
 
     $badItems = @(
         "C:\ProgramData\Paessler"
-        "C:\Program Files (x86)\PRTG Network Monitor\download"
-        "C:\Program Files (x86)\PRTG Network Monitor\PRTG Installer Archive"
-        "C:\Program Files (x86)\PRTG Network Monitor\prtg-installer-for-distribution"
+        "$script:prtgProgramFiles\download"
+        "$script:prtgProgramFiles\PRTG Installer Archive"
+        "$script:prtgProgramFiles\prtg-installer-for-distribution"
         Join-Path $script:imageContext "config.dat"
     )
 
@@ -1015,6 +1080,14 @@ The Wait-PrtgServer cmdlet waits for the PRTG Server process to end within a Doc
 #>
 function Wait-PrtgServer
 {
+    $newCustomSensors = "C:\ProgramData\Paessler\PRTG Network Monitor\Custom Sensors"
+
+    if(!(Test-Path $newCustomSensors))
+    {
+        __Log "Restoring missing Custom Sensors"
+        Copy-Item $script:customSensorsBackup $newCustomSensors -Recurse -Force
+    }
+
     __Log "Waiting 10 seconds for $script:coreServiceName to start..."
     sleep 10
 
@@ -1043,7 +1116,7 @@ function Wait-PrtgServer
         }
     }
 
-    __Log "Exiting as $script:coreServiceName status was '$($service.Status)"
+    __Log "Exiting as $script:coreServiceName status was '$($service.Status)'"
 }
 
 function __Log($msg)

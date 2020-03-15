@@ -73,6 +73,8 @@ New-PrtgBuild *18* C:\Installers -Server
 New-PrtgContainer *14.4* -Volume
 ```
 
+PrtgDocker automatically redirects the *Custom Sensors* folder under Program Files to ProgramData. To install any custom sensors in your container, simply place them in the appropriate folder under the *Custom Sensors* directory in your container's volume.
+
 ### Image Compatibility
 
 PRTG is compatible with both Windows Server 2016 and 2019 based images when utilizing (mainly) 64-bit executables. When installing in Server Core 2019 based images, PrtgDocker will

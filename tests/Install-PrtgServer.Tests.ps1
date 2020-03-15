@@ -1,5 +1,7 @@
 ﻿. $PSScriptRoot\..\PrtgDocker.ps1
 
+#todo: tests for all thenew features
+
 Describe "Install-PrtgServer" {
 
     $env:PRTG_EMAIL = "prtg@example.com"
@@ -13,12 +15,16 @@ Describe "Install-PrtgServer" {
 
     Mock "__ExecInstall" {
         $installer | Should Be "C:\Installer\notepad.exe" | Out-Null
-        $installerArgs -join " " | Should Be "/verysilent /adminemail=`"prtg@example.com`" /SUPPRESSMSGBOXES /log=`"C:\Installer\log.log`" /licensekey=`"topSecret`" /licensekeyname=`"prtguser`"" | Out-Null
+        $installerArgs -join " " | Should Be "/verysilent /adminemail=`"prtg@example.com`" /SUPPRESSMSGBOXES /log=`"C:\Installer\log.log`" /licensekey=`"topSecret`" /licensekeyname=`"prtguser`" /NoInitialAutoDisco=1" | Out-Null
     } -Verifiable
 
     Mock "Get-Content" {}
     Mock "Get-Process" {}
     Mock "Stop-Service" {}
+    Mock "Add-Content" {}
+    Mock "New-Item" {}
+    Mock "Move-Item" {}
+    Mock "Copy-Item" {}
 
     function MockService
     {
@@ -76,6 +82,7 @@ Describe "Install-PrtgServer" {
                 "C:\Program Files (x86)\PRTG Network Monitor\download"
                 "C:\Program Files (x86)\PRTG Network Monitor\PRTG Installer Archive"
                 "C:\Program Files (x86)\PRTG Network Monitor\prtg-installer-for-distribution"
+                "C:\Program Files (x86)\PRTG Network Monitor\webroot\help"
             )
 
             if($script:includeConfig)
