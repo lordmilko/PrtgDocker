@@ -1,7 +1,5 @@
 ﻿. $PSScriptRoot\..\PrtgDocker.ps1
 
-#todo: tests for all thenew features
-
 Describe "Install-PrtgServer" {
 
     $env:PRTG_EMAIL = "prtg@example.com"
@@ -90,9 +88,14 @@ Describe "Install-PrtgServer" {
                 $allowed += "C:\Installer\config.dat"
             }
 
-            if($Path -in $allowed)
+            if($Path -in $allowed -or $LiteralPath -in $allowed)
             {
                 return
+            }
+
+            if(!$Path)
+            {
+                $Path = $LiteralPath
             }
 
             throw "Remove-Item was called with '$Path'"
@@ -133,7 +136,7 @@ Describe "Install-PrtgServer" {
             }
 
             throw "Uri was '$Uri', OutFile was '$OutFile'"
-        }
+        } -Verifiable
 
         MockInstaller "14.1.2.3"
         MockService
@@ -168,7 +171,7 @@ Describe "Install-PrtgServer" {
             }
 
             throw "Uri was '$Uri', OutFile was '$OutFile'"
-        }
+        } -Verifiable
 
         MockInstaller "17.1.2.3"
         MockService
@@ -222,6 +225,7 @@ Describe "Install-PrtgServer" {
     It "throws when PRTGCoreService was not installed" {
         MockInstaller "14.1.2.3"
         Mock "Get-Service" {}
+        Mock "Test-Path" { $true} -ParameterFilter { $Path -eq "C:\Installer\log.log" }
 
         { Install-PrtgServer } | Should Throw "PRTGCoreService wasn't even installed. Please see log above for details"
     }
@@ -234,6 +238,7 @@ Describe "Install-PrtgServer" {
                 Status = "Stopped"
             }
         }
+        Mock "Test-Path" { $true} -ParameterFilter { $Path -eq "C:\Installer\log.log" }
 
         { Install-PrtgServer } | Should Throw "PRTGCoreService wasn't able to start. Please see log above for details"
     }

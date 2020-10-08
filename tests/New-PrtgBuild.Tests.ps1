@@ -14,6 +14,150 @@ Describe "New-PrtgBuild" {
 
     Mock Invoke-Command {}
 
+    #region Build Helpers
+
+    function MockInstaller($version, [switch]$Probe)
+    {
+        Mock "Test-Path" {
+            return $true
+        } -ParameterFilter { $Path -eq "C:\Archives" -or $Path -like "*dockerTemp" }
+
+        Mock "Test-Path" {
+            return $false
+        } -ParameterFilter { $Path -like "*dockerTempServer*" -or $Path -like "*dockerTemp\config.dat" }
+
+        Mock "Get-ChildItem" {
+
+            $productName = "PRTG Network Monitor"
+
+            if($Probe)
+            {
+                $productName = "PRTG Remote Probe"
+            }
+
+            [PSCustomObject]@{
+                FullName = "C:\Archives\notepad 2006.exe"
+                Name = "notepad 2006.exe"
+                VersionInfo = [PSCustomObject]@{
+                    ProductName = $productName
+                    FileVersion = $version
+                }
+            }
+        }.GetNewClosure()
+    }
+
+    function MockExec($version, $script:imageStr, $script:pullStr, $script:buildStr, [switch]$Probe)
+    {
+        MockInstaller $version -Probe:$Probe
+
+        Mock "__Exec" {} -ParameterFilter {
+            return $commands -join " " -eq $script:pullStr
+        } -Verifiable
+
+        Mock "__Exec" {} -ParameterFilter {
+            return $commands -join " " -eq $script:imageStr
+        } -Verifiable
+
+        MockBuild $script:buildStr
+    }
+
+    function MockBuild($script:buildStr)
+    {
+        Mock "__Exec" {} -ParameterFilter {
+            $temp = Join-Path ([IO.Path]::GetTempPath()) "dockerTemp"
+            $b = "build $temp -t $script:buildStr"
+
+            if($b.Contains("<wildcard>"))
+            {
+                $b = [regex]::Escape($b) -replace "<wildcard>",".+?"
+
+                return $commands -join " " -match $b
+            }
+            else
+            {
+                return $commands -join " " -eq $b
+            }
+        } -Verifiable
+    }
+
+    function MockCopy($script:includeConfig = $false)
+    {
+        Mock "Copy-Item" {
+
+            $temp = [IO.Path]::GetTempPath()
+            $dockerTemp = Join-Path $temp "dockerTemp"
+            $dockerFile = Join-Path $dockerTemp "Dockerfile"
+            $scriptFile = Join-path $dockerTemp "PrtgDocker.ps1"
+
+            $allowed = @(
+                $dockerFile
+                $scriptFile
+            )
+
+            if($Destination -in $allowed)
+            {
+                return
+            }
+
+            if($Path -eq "C:\Archives\notepad 2006.exe" -and $Destination -eq $dockerTemp)
+            {
+                return
+            }
+
+            if($Path -like "C:\Windows\Fonts*")
+            {
+                return
+            }
+
+            if($script:includeConfig)
+            {
+                if($Path -like "*config.dat")
+                {
+                    return
+                }
+            }
+
+            throw "Copy-Item should not have been called with Path '$Path', Destination '$Destination'"
+        }
+    }
+
+    function MockRemove($script:includeConfig = $false)
+    {
+        Mock "Remove-Item" {
+            $temp = [IO.Path]::GetTempPath()
+            $dockerTemp = Join-Path $temp "dockerTemp"
+
+            $allowed = @(
+                Join-Path $dockerTemp "notepad 2006.exe"
+                $dockerTemp
+            )
+
+            if($Path -in $allowed)
+            {
+                return
+            }
+
+            if($script:includeConfig -and $Path -eq (Join-Path $dockerTemp "config.dat"))
+            {
+                return
+            }
+
+            throw "Remove-Item should not have been called with Path '$Path'"
+        }
+    }
+
+    function MockFonts
+    {
+        Mock "Get-ChildItem" {
+            [PSCustomObject]@{
+                Name = "arial.ttf"
+                FullName = "C:\Windows\Fonts\arial.ttf"
+            }
+        } -ParameterFilter { $Path -eq "C:\Windows\Fonts" }
+    }
+
+    #endregion
+
     Context "Image" {
         It "qualifies a tag" {
 
@@ -92,123 +236,6 @@ Describe "New-PrtgBuild" {
 
     Context "Build" {
 
-        function MockInstaller($version)
-        {
-            Mock "Test-Path" {
-                return $true
-            } -ParameterFilter { $Path -eq "C:\Archives" -or $Path -like "*dockerTemp" }
-
-            Mock "Test-Path" {
-                return $false
-            } -ParameterFilter { $Path -like "*dockerTempServer*" -or $Path -like "*dockerTemp\config.dat" }
-
-            Mock "Get-ChildItem" {
-                [PSCustomObject]@{
-                    FullName = "C:\Archives\notepad 2006.exe"
-                    Name = "notepad 2006.exe"
-                    VersionInfo = [PSCustomObject]@{
-                        ProductName = "PRTG Network Monitor"
-                        FileVersion = $version
-                    }
-                }
-            }.GetNewClosure()
-        }
-
-        function MockExec($version, $script:imageStr, $script:pullStr, $script:buildStr)
-        {
-            MockInstaller $version
-
-            Mock "__Exec" {} -ParameterFilter {
-                return $commands -join " " -eq $script:pullStr
-            } -Verifiable
-
-            Mock "__Exec" {} -ParameterFilter {
-                return $commands -join " " -eq $script:imageStr
-            } -Verifiable
-
-            MockBuild $script:buildStr
-        }
-
-        function MockBuild($script:buildStr)
-        {
-            Mock "__Exec" {} -ParameterFilter {
-                $temp = Join-Path ([IO.Path]::GetTempPath()) "dockerTemp"
-                $b = "build $temp -t $script:buildStr"
-
-                if($b.Contains("<wildcard>"))
-                {
-                    $b = [regex]::Escape($b) -replace "<wildcard>",".+?"
-
-                    return $commands -join " " -match $b
-                }
-                else
-                {
-                    return $commands -join " " -eq $b
-                }
-            } -Verifiable
-        }
-
-        function MockCopy($script:includeConfig = $false)
-        {
-            Mock "Copy-Item" {
-
-                $temp = [IO.Path]::GetTempPath()
-                $dockerTemp = Join-Path $temp "dockerTemp"
-                $dockerFile = Join-Path $dockerTemp "Dockerfile"
-                $scriptFile = Join-path $dockerTemp "PrtgDocker.ps1"
-
-                $allowed = @(
-                    $dockerFile
-                    $scriptFile
-                )
-
-                if($Destination -in $allowed)
-                {
-                    return
-                }
-
-                if($Path -eq "C:\Archives\notepad 2006.exe" -and $Destination -eq $dockerTemp)
-                {
-                    return
-                }
-
-                if($script:includeConfig)
-                {
-                    if($Path -like "*config.dat")
-                    {
-                        return
-                    }
-                }
-
-                throw "Copy-Item should not have been called with Path '$Path', Destination '$Destination'"
-            }
-        }
-
-        function MockRemove($script:includeConfig = $false)
-        {
-            Mock "Remove-Item" {
-                $temp = [IO.Path]::GetTempPath()
-                $dockerTemp = Join-Path $temp "dockerTemp"
-
-                $allowed = @(
-                    Join-Path $dockerTemp "notepad 2006.exe"
-                    $dockerTemp
-                )
-
-                if($Path -in $allowed)
-                {
-                    return
-                }
-
-                if($script:includeConfig -and $Path -eq (Join-Path $dockerTemp "config.dat"))
-                {
-                    return
-                }
-
-                throw "Remove-Item should not have been called with Path '$Path'"
-            }
-        }
-
         It "installs a legacy version" {
 
             MockExec `
@@ -219,6 +246,7 @@ Describe "New-PrtgBuild" {
 
             MockCopy
             MockRemove
+            MockFonts
 
             New-PrtgBuild -Path "C:\Archives"
 
@@ -323,6 +351,21 @@ Describe "New-PrtgBuild" {
             Assert-VerifiableMocks
         }
 
+        It "specifies additional args" {
+            MockExec `
+                "14.1.2.3" `
+                "image ls --format `"{{json . }}`"" `
+                "pull mcr.microsoft.com/windows/servercore:ltsc2019" `
+                "lordmilko/prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019 -m 4G"
+
+            MockCopy
+            MockRemove
+
+            New-PrtgBuild -Path "C:\Archives" -Repository "lordmilko/prtg" -AdditionalArgs "-m","4G"
+
+            Assert-VerifiableMocks
+        }
+
         It "uses a local web server" {
 
             MockExec `
@@ -349,6 +392,11 @@ Describe "New-PrtgBuild" {
                 }
 
                 if($Path -eq "C:\Archives\notepad 2006.exe" -and $Destination -eq $dockerTempServer)
+                {
+                    return
+                }
+
+                if($Path -like "C:\Windows\Fonts*")
                 {
                     return
                 }
@@ -398,6 +446,138 @@ Describe "New-PrtgBuild" {
             New-PrtgBuild -Path "C:\Archives"
 
             Assert-VerifiableMocks
+        }
+
+        It "throws when local Arial and Tahoma fonts can't be found" {
+            Mock "__Exec" {}
+
+            Mock "Get-ChildItem" {
+                return
+            } -ParameterFilter { $Path -eq "C:\Windows\Fonts" }
+
+            { New-PrtgBuild -Path "C:\Archives" } | Should Throw "Cannot find any fonts for Arial and Tahoma under C:\Windows\Fonts"
+        }
+    }
+
+    Context "Probe" {
+        It "builds a probe" {
+
+            MockExec -Probe `
+                "14.1.2.3" `
+                "image ls --format `"{{json . }}`"" `
+                "pull mcr.microsoft.com/windows/servercore:ltsc2019" `
+                "prtgprobe:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019"
+
+            MockCopy
+            MockRemove
+            MockFonts
+
+            New-PrtgBuild -Probe
+
+            Assert-VerifiableMocks
+        }
+
+        It "installs an executable that is not named in the default name format" {
+        
+            Mock "Copy-Item" {}
+            Mock "__Exec" {}
+
+            Mock "Get-ChildItem" {
+                [PSCustomObject]@{
+                    FullName = "C:\Archives\notepad 2006.exe"
+                    Name = "notepad"
+                    VersionInfo = [PSCustomObject]@{
+                        ProductName = "PRTG Remote Probe"
+                        FileVersion = "14.1.2.3"
+                    }
+                }
+            }
+
+            New-PrtgBuild -Probe
+        }
+
+        It "throws when Dockerfile.prtg is missing" {
+
+            Mock "Copy-Item" {}
+            Mock "__Exec" {}
+            Mock "Get-ChildItem" {
+
+                [PSCustomObject]@{
+                    FullName = "C:\Archives\notepad 2006.exe"
+                    Name = "notepad"
+                    VersionInfo = [PSCustomObject]@{
+                        ProductName = "PRTG Remote Probe"
+                        FileVersion = "14.1.2.3"
+                    }
+                }
+            }
+
+            Mock "Test-Path" {
+                if($Path -like "*Dockerfile.probe")
+                {
+                    return $false
+                }
+
+                return $true
+            }
+
+            { New-PrtgBuild -Probe } | Should Throw "Dockerfile.probe' is missing"
+        }
+
+        It "throws when no executables are found" {
+            Mock "Copy-Item" {}
+            Mock "__Exec" {}
+            Mock "Get-ChildItem" {}
+            Mock "Test-Path" { $true }
+
+            { New-PrtgBuild -Probe } | Should Throw "No executable files exist"
+        }
+
+        It "throws when no probe installers are found" {
+            Mock "Copy-Item" {}
+            Mock "__Exec" {}
+            Mock "Get-ChildItem" {
+
+                [PSCustomObject]@{
+                    FullName = "C:\Archives\notepad 2006.exe"
+                    Name = "notepad"
+                    VersionInfo = [PSCustomObject]@{
+                        ProductName = "PRTG Network Monitor"
+                        FileVersion = "14.1.2.3"
+                    }
+                }
+            }
+
+            { New-PrtgBuild -Probe } | Should THrow "Couldn't find any PRTG Remote Probe installers under the specified folder"
+        }
+
+        It "throws when multiple probe installers are found" {
+            Mock "Copy-Item" {}
+            Mock "__Exec" {}
+            Mock "Get-ChildItem" {
+
+                [PSCustomObject]@{
+                    FullName = "C:\Archives\notepad 2006.exe"
+                    Name = "notepad"
+                    VersionInfo = [PSCustomObject]@{
+                        ProductName = "PRTG Remote Probe"
+                        FileVersion = "14.1.2.3"
+                    }
+                }
+
+                [PSCustomObject]@{
+                    FullName = "C:\Archives\notepad 2006.exe"
+                    Name = "notepad"
+                    VersionInfo = [PSCustomObject]@{
+                        ProductName = "PRTG Remote Probe"
+                        FileVersion = "17.1.2.3"
+                    }
+                }
+            }
+
+            $str = "Found multiple probe installers under 'D:\Programming\PowerShell\PrtgDocker' ('C:\Archives\notepad 2006.exe (14.1.2.3)', 'C:\Archives\notepad 2006.exe (17.1.2.3)'). Please specify only a single installer"
+
+            { New-PrtgBuild -Probe } | Should Throw $str
         }
     }
 

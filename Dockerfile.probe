@@ -1,0 +1,12 @@
+ARG BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019
+FROM $BASE_IMAGE
+
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+ARG PRTG_INSTALLER_URL
+
+COPY PrtgDocker.ps1 *.exe *.ttf C:/Installer/
+RUN Set-ExecutionPolicy Unrestricted; C:/Installer/PrtgDocker.ps1 -InstallProbe
+
+ENTRYPOINT ["powershell"]
+CMD ["-command", "C:/Installer/PrtgDocker.ps1 -WaitProbe"]
