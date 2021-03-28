@@ -1214,7 +1214,7 @@ function __ExecInstall($installer, $installerArgs, $logFile)
     {
         if($LASTEXITCODE -eq -1073741511)
         {
-            throw "!!! ERROR: installer did not complete successfully. Please check that your Docker host AND/OR container image are up to date. For more information please see https://github.com/lordmilko/PrtgDocker/wiki/Advanced#windows-updates"
+            throw "!!! ERROR: installer did not complete successfully. Please check that your Docker host AND/OR container image are up to date. For more information please see https://github.com/lordmilko/PrtgDocker/wiki/Image-Compatibility#windows-updates"
         }
 
         __FailInstall "!!! ERROR: installer did not complete successfully" $logFile
