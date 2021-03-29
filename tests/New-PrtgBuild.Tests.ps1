@@ -431,6 +431,43 @@ Describe "New-PrtgBuild" {
             Assert-VerifiableMocks
         }
 
+        It "fixes the time" {
+            MockExec `
+                "14.1.2.3" `
+                "image ls --format `"{{json . }}`"" `
+                "pull mcr.microsoft.com/windows/servercore:ltsc2019" `
+                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019"
+
+            MockCopy
+            MockRemove
+            MockFonts
+
+            Mock "__AdjustServerTime" {} -Verifiable
+
+            New-PrtgBuild -Path "C:\Archives"
+
+            Assert-VerifiableMocks
+        }
+
+        It "skips fixing the time" {
+
+            MockExec `
+                "14.1.2.3" `
+                "image ls --format `"{{json . }}`"" `
+                "pull mcr.microsoft.com/windows/servercore:ltsc2019" `
+                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019"
+
+            MockCopy
+            MockRemove
+            MockFonts
+
+            Mock "__AdjustServerTime" {
+                throw "__AdjustServerTime should not have been called"
+            }
+
+            New-PrtgBuild -Path "C:\Archives" -SkipTimeFix
+        }
+
         It "doesn't pull base image when it already exists" {
 
             Mock "Get-PrtgImage" {
@@ -439,6 +476,7 @@ Describe "New-PrtgBuild" {
 
             MockInstaller "14.1.2.3"
             MockBuild "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019"
+            Mock "__AdjustServerTime" {}
 
             MockCopy
             MockRemove

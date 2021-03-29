@@ -55,7 +55,9 @@ The license name that should be used for PRTG. By default "prtgtrial" is used.
 .PARAMETER LicenseKey
 The license key that should be used for PRTG. By default PRTG Trial key is used.
 .PARAMETER Credential
-Credential that should be used for remotely connecting to the Docker server using WinRM for changing the time. Used when $env:DOCKER_HOST is specified.
+Credential that should be used for remotely connecting to the Docker server using WinRM for changing the time. Used when $env:DOCKER_HOST is specified. If -SkipTimeFix is specified, this parameter does nothing.
+.PARAMETER SkipTimeFix
+Indicates that New-PrtgBuild should not attempt to adjust the time of the Docker Host for building out of date PRTG installations.
 .PARAMETER Repository
 Repository that should be used for the build. By default this value is "prtg".
 .PARAMETER Server
@@ -112,6 +114,9 @@ function New-PrtgBuild
         [Parameter(Mandatory = $false, ParameterSetName = "Server")]
         [PSCredential]$Credential,
 
+        [Parameter(Mandatory = $false, ParameterSetName = "Server")]
+        [switch]$SkipTimeFix,
+
         [ValidateNotNullorEmpty()]
         [Parameter(Mandatory = $false)]
         [string]$Repository = "prtg",
@@ -137,6 +142,7 @@ function New-PrtgBuild
         LicenseName = $LicenseName
         LicenseKey = $LicenseName
         DockerHost = $null
+        SkipTimeFix = $SkipTimeFix
         Repository = $Repository
         FileServer = $null
         SkipExisting = $SkipExisting
@@ -346,11 +352,18 @@ function __GetDockerHost($settings)
     {
         $settings.DockerHost = ([Uri]$env:DOCKER_HOST).Host
 
-        Write-Host "`$env:DOCKER_HOST is defined. Will remotely connect to '$($settings.DockerHost)' to manipulate time"
-
-        if(!($global:dockerCreds))
+        if($settings.SkipTimeFix)
         {
-            $global:dockerCreds = Get-Credential -Message "Please enter your Windows credentials to connect to '$($settings.DockerHost)'"
+            Write-Host "`$env:DOCKER_HOST is defined, however will not attempt to manipulate time on '$($settings.DockerHost)' as -SkipTimeFix was specified"
+        }
+        else
+        {
+            Write-Host "`$env:DOCKER_HOST is defined. Will remotely connect to '$($settings.DockerHost)' to manipulate time"
+
+            if(!($global:dockerCreds))
+            {
+                $global:dockerCreds = Get-Credential -Message "Please enter your Windows credentials to connect to '$($settings.DockerHost)'"
+            }
         }
     }
     else
@@ -443,13 +456,19 @@ function __ExecuteBuild($installer, $settings)
 
     try
     {
-        $job = __AdjustServerTime $settings.DockerHost $installer
+        if (!$settings.SkipTimeFix)
+        {
+            $job = __AdjustServerTime $settings.DockerHost $installer
+        }
 
         __ExecuteBuildInternal $installer $settings
     }
     finally
     {
-        $job | Remove-Job -Force
+        if($job)
+        {
+            $job | Remove-Job -Force
+        }
 
         __RemoveFromDockerTemp $installer.Name $settings
         __RemoveFromDockerTemp "config.dat" $settings
