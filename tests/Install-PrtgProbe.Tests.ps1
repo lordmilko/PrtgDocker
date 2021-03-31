@@ -189,4 +189,31 @@ Describe "Install-PrtgProbe" {
 
         Assert-VerifiableMocks
     }
+
+    It "installs with additional installer args" {
+
+        try
+        {
+            $env:PRTG_INSTALLER_ADDITIONAL_ARGS = "/foo /bar"
+
+            Mock "__ExecInstall" {
+                $installer | Should Be "C:\Installer\notepad.exe" | Out-Null
+                $installerArgs -join " " | Should Be "/verysilent /SUPPRESSMSGBOXES /norestart /log=`"C:\Installer\log.log`" /foo /bar" | Out-Null
+            } -Verifiable
+
+            MockInstaller "17.1.2.3"
+            MockService
+            MockRemove
+
+            Install-PrtgProbe
+
+            Assert-VerifiableMocks
+        }
+        finally
+        {
+            $env:PRTG_INSTALLER_ADDITIONAL_ARGS = $null
+        }
+
+        
+    }
 }

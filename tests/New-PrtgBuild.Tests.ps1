@@ -366,6 +366,22 @@ Describe "New-PrtgBuild" {
             Assert-VerifiableMocks
         }
 
+        It "specifies additional installer args" {
+            MockExec `
+                "14.1.2.3" `
+                "image ls --format `"{{json . }}`"" `
+                "pull mcr.microsoft.com/windows/servercore:ltsc2019" `
+                "prtg:14.1.2 --build-arg BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019 --build-arg PRTG_INSTALLER_ADDITIONAL_ARGS=/foo /bar"
+
+            MockCopy
+            MockRemove
+            MockFonts
+
+            New-PrtgBuild -Path "C:\Archives" -AdditionalInstallerArgs "/foo","/bar"
+
+            Assert-VerifiableMocks
+        }
+
         It "uses a local web server" {
 
             MockExec `

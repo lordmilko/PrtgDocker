@@ -68,6 +68,8 @@ Specifies that installers that already have images should be skipped.
 Specifies that a PRTG Remote Probe image should be built, rather than a PRTG Core Server image.
 .PARAMETER AdditionalArgs
 Specifies additional arguments that should be included in the call to docker build.
+.PARAMETER AdditionalInstallerArgs
+Specifies additional arguments that should be included in the call to the PRTG installer during the docker build.
 
 .EXAMPLE
 C:\> New-PrtgBuild
@@ -131,7 +133,10 @@ function New-PrtgBuild
         [switch]$Probe,
 
         [Parameter(Mandatory = $false)]
-        [string[]]$AdditionalArgs
+        [string[]]$AdditionalArgs,
+
+        [Parameter(Mandatory = $false)]
+        [string[]]$AdditionalInstallerArgs
     )
 
     $settings = [PSCustomObject]@{
@@ -150,6 +155,7 @@ function New-PrtgBuild
         DockerFile = "Dockerfile"
         ProductName = "PRTG Network Monitor"
         AdditionalArgs = $AdditionalArgs
+        AdditionalInstallerArgs = $AdditionalInstallerArgs
     }
 
     if($Credential)
@@ -529,6 +535,7 @@ function __ExecuteBuildInternal($installer, $settings)
             PrtgEmail = "PRTG_EMAIL"
             LicenseName = "PRTG_LICENSENAME"
             LicenseKey = "PRTG_LICENSEKEY"
+            AdditionalInstallerArgs = "PRTG_INSTALLER_ADDITIONAL_ARGS"
         }
     }
 
@@ -1116,6 +1123,13 @@ function Install-PrtgServer
         "/NoInitialAutoDisco=1"
     )
 
+    if($env:PRTG_INSTALLER_ADDITIONAL_ARGS)
+    {
+        $split = $env:PRTG_INSTALLER_ADDITIONAL_ARGS -split " "
+
+        $installerArgs += $split
+    }
+
     $job = __StartLicenseFixer $installer
 
     __ExecInstall $installer.FullName $installerArgs $installerLog
@@ -1468,6 +1482,13 @@ function Install-PrtgProbe
         "/norestart"
         "/log=`"$installerLog`""
     )
+
+    if($env:PRTG_INSTALLER_ADDITIONAL_ARGS)
+    {
+        $split = $env:PRTG_INSTALLER_ADDITIONAL_ARGS -split " "
+
+        $installerArgs += $split
+    }
 
     __ExecInstall $installer.FullName $installerArgs $installerLog
     __InstallFonts

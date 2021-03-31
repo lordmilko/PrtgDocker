@@ -261,6 +261,31 @@ Describe "Install-PrtgServer" {
         { Install-PrtgServer } | Should Throw "32-bit version of PRTG appears to be installed"
     }
 
+    It "installs with additional installer args" {
+        try
+        {
+            $env:PRTG_INSTALLER_ADDITIONAL_ARGS = "/foo /bar"
+
+            Mock "__ExecInstall" {
+                $installer | Should Be "C:\Installer\notepad.exe" | Out-Null
+                $installerArgs -join " " | Should Be "/verysilent /adminemail=`"prtg@example.com`" /SUPPRESSMSGBOXES /log=`"C:\Installer\log.log`" /licensekey=`"topSecret`" /licensekeyname=`"prtguser`" /NoInitialAutoDisco=1 /foo /bar" | Out-Null
+            } -Verifiable
+
+            MockInstaller "14.1.2.3"
+            MockService
+            MockCopy
+            MockRemove
+
+            Install-PrtgServer
+
+            Assert-VerifiableMocks
+        }
+        finally
+        {
+            $env:PRTG_INSTALLER_ADDITIONAL_ARGS = $null
+        }
+    }
+
     $env:PRTG_EMAIL = $null
     $env:PRTG_LICENSENAME = $null
     $env:PRTG_LICENSEKEY = $null
