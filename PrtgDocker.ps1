@@ -300,7 +300,7 @@ function __GetInstallers($name, $installerFolder, $productName = "PRTG Network M
     }
 
     $candidates | foreach { $_ | Add-Member Version ([Version]$_.VersionInfo.FileVersion) }
-    $candidates = $candidates | sort version
+    $candidates = $candidates | Sort-Object version
 
     if($mode -eq "Probe")
     {
